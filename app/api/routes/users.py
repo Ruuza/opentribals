@@ -15,6 +15,7 @@ from app.schemas import (
     UserRegister,
     UserUpdateMe,
 )
+from app.utils import check_user_not_already_exists
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -28,7 +29,7 @@ def update_user_me(
     """
 
     if user_in.email:
-        existing_user = crud.get_user_by_email(session=session, email=user_in.email)
+        existing_user = crud.User.get_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != current_user.id:
             raise HTTPException(
                 status_code=409, detail="User with this email already exists"
@@ -88,14 +89,11 @@ def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
     Create new user without the need to be logged in.
     """
-    user = crud.get_user_by_email(session=session, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
-        )
+    check_user_not_already_exists(
+        session=session, email=user_in.email, username=user_in.username
+    )
     user_create = UserCreate.model_validate(user_in)
-    user = crud.create_user(session=session, user_create=user_create)
+    user = crud.User.create(session=session, user_create=user_create)
     return user
 
 

@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["test", "local", "staging", "production"] = "local"
     IS_RUNNING_IN_DOCKER: bool = False
 
-    BACKEND_CORS_ORIGINS: Annotated[
-        list[AnyUrl] | str, BeforeValidator(parse_cors)
-    ] = []
+    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = (
+        []
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -55,18 +55,6 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
-
-    @model_validator(mode="after")
-    def _adjust_for_testing(self) -> Self:
-        if self.ENVIRONMENT == "test":
-            self.POSTGRES_DB = "OpenTribalsTest"
-            if self.IS_RUNNING_IN_DOCKER:
-                self.POSTGRES_SERVER = "db"
-                self.POSTGRES_PORT = 5432
-            else:
-                self.POSTGRES_SERVER = "localhost"
-                self.POSTGRES_PORT = 8082
-        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -102,7 +90,6 @@ class Settings(BaseSettings):
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
-    EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
@@ -125,6 +112,20 @@ class Settings(BaseSettings):
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
 
+        return self
+
+    @model_validator(mode="after")
+    def _adjust_for_testing(self) -> Self:
+        if self.ENVIRONMENT == "test":
+            self.POSTGRES_DB = "OpenTribalsTest"
+            self.FIRST_SUPERUSER = "superuser@example.com"
+            self.FIRST_SUPERUSER_PASSWORD = "testpassword"
+            if self.IS_RUNNING_IN_DOCKER:
+                self.POSTGRES_SERVER = "db"
+                self.POSTGRES_PORT = 5432
+            else:
+                self.POSTGRES_SERVER = "localhost"
+                self.POSTGRES_PORT = 8082
         return self
 
 

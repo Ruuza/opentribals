@@ -76,7 +76,7 @@ keep-runtime-typing = true
 target-version = ['py312']
 line-length = 88
 include = 'app/'
-exclude = 'alembic|email-templates'
+exclude = 'alembic|email-templates|__pycache__|.mypycache'
 
 [tool.isort]
 profile = "black"
