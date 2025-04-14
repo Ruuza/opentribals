@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["test", "local", "staging", "production"] = "local"
     IS_RUNNING_IN_DOCKER: bool = False
 
-    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = (
-        []
-    )
+    BACKEND_CORS_ORIGINS: Annotated[
+        list[AnyUrl] | str, BeforeValidator(parse_cors)
+    ] = []
 
     @computed_field  # type: ignore[prop-decorator]
     @property

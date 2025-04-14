@@ -41,7 +41,7 @@ def test_create_user_new_email(
 def test_create_user_existing_email(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    test_user: models.User,
+    test_user: models.User,  # noqa: ARG001
 ) -> None:
     data = {
         "email": EMAIL_TEST_USER,
@@ -62,7 +62,7 @@ def test_create_user_existing_email(
 def test_create_user_existing_username(
     client: TestClient,
     superuser_token_headers: dict[str, str],
-    test_user: models.User,
+    test_user: models.User,  # noqa: ARG001
 ) -> None:
     email = random_email()
 
@@ -100,7 +100,7 @@ def test_retrieve_users(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     session: Session,
-    test_user: models.User,
+    test_user: models.User,  # noqa: ARG001
 ) -> None:
     email = random_email()
     password = random_lower_string()

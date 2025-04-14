@@ -93,20 +93,19 @@ class PlayerBase(SQLModel):
 
 
 class VillageBasePublic(SQLModel):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: int = Field(primary_key=True)
     name: str = Field(min_length=2, max_length=24)
     x: int
     y: int
 
 
 class VillageBasePrivate(VillageBasePublic):
-    headquarters: int = Field(default=1)
-    woodcutter: int = Field(default=1)
-    clay_pit: int = Field(default=1)
-    iron_mine: int = Field(default=1)
-    farm: int = Field(default=1)
-    barracks: int = Field(default=0)
-    stable: int = Field(default=0)
+    headquarters_lvl: int = Field(default=1)
+    woodcutter_lvl: int = Field(default=1)
+    clay_pit_lvl: int = Field(default=1)
+    iron_mine_lvl: int = Field(default=1)
+    farm_lvl: int = Field(default=1)
+    storage_lvl: int = Field(default=1)
 
     anti_melee_units: int = Field(default=0)
     anti_ranged_units: int = Field(default=0)

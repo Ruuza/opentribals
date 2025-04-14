@@ -7,7 +7,7 @@ from app.api.routes import (
     users,
     users_admin,
     utils,
-    # villages,
+    villages,
     world,
 )
 from app.core.config import settings
@@ -23,7 +23,7 @@ api_router.include_router(users_admin.router)
 # Game API
 api_router.include_router(players.router)
 api_router.include_router(users_admin.router)
-# api_router.include_router(villages.router)
+api_router.include_router(villages.router)
 api_router.include_router(world.router)
 
 if settings.ENVIRONMENT in ["test", "local"]:

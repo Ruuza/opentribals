@@ -35,7 +35,7 @@ def db() -> Generator[None, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def session(db) -> Generator[Session, None, None]:
+def session(db) -> Generator[Session, None, None]:  # noqa: ARG001
     with Session(engine) as session:
         SQLModel.metadata.drop_all(engine)
         SQLModel.metadata.create_all(engine)
@@ -73,5 +73,8 @@ def superuser_token_headers(client: TestClient) -> dict[str, str]:
 
 
 @pytest.fixture()
-def normal_user_token_headers(client: TestClient, test_user) -> dict[str, str]:
+def normal_user_token_headers(
+    client: TestClient,
+    test_user,  # noqa: ARG001
+) -> dict[str, str]:
     return get_user_auth_headers(client=client)
