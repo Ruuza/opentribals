@@ -1,8 +1,9 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlmodel import Field, Relationship
+from sqlmodel import Column, Enum, Field, Relationship, SQLModel
 
+from app.game.buildings import BuildingType
 from app.schemas import PlayerBase, UserBase, VillageBasePrivate
 
 
@@ -31,3 +32,12 @@ class Village(VillageBasePrivate, table=True):
     last_iron_update: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     player: Player | None = Relationship(back_populates="villages")
+
+
+class BuildingEvent(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    village_id: int
+    building_type: BuildingType = Field(sa_column=Column(Enum(BuildingType)))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    complete_at: datetime | None
+    completed: bool = False
