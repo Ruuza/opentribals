@@ -1,6 +1,7 @@
 import uuid
+from datetime import UTC, datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app import models
 from app.core.security import get_password_hash, verify_password
@@ -38,14 +39,12 @@ class User:
     @staticmethod
     def get_by_email(*, session: Session, email: str) -> models.User | None:
         statement = select(models.User).where(models.User.email == email)
-        session_user = session.exec(statement).first()
-        return session_user
+        return session.exec(statement).first()
 
     @staticmethod
     def get_by_username(*, session: Session, username: str) -> models.User | None:
         statement = select(models.User).where(models.User.username == username)
-        session_user = session.exec(statement).first()
-        return session_user
+        return session.exec(statement).first()
 
     @staticmethod
     def authenticate(
@@ -86,19 +85,94 @@ class Village:
         village = session.exec(statement).first()
         return village
 
+    @staticmethod
+    def get(
+        *,
+        session: Session,
+        village_id: int,
+    ) -> models.Village | None:
+        """Get village without lock"""
+        return session.exec(
+            select(models.Village).where(models.Village.id == village_id)
+        ).first()
+
 
 class BuildingEvent:
     @staticmethod
-    def get_following_events_for_update(
+    def get_following_events(
         *, session: Session, village_id: int
     ) -> list[models.BuildingEvent]:
-        """Get uncompleted building events with FOR UPDATE lock"""
+        """Get uncompleted building events"""
         statement = (
             select(models.BuildingEvent)
             .where(models.BuildingEvent.village_id == village_id)
             .where(models.BuildingEvent.completed == False)  # noqa: E712
-            .with_for_update()
         )
-        building_events = session.exec(statement).all()
+        return session.exec(statement).all()
 
-        return building_events
+
+class UnitTrainingEvent:
+    @staticmethod
+    def get_following_events(
+        *, session: Session, village_id: int
+    ) -> list[models.UnitTrainingEvent]:
+        """Get uncompleted unit training events"""
+        statement = (
+            select(models.UnitTrainingEvent)
+            .where(models.UnitTrainingEvent.village_id == village_id)
+            .where(models.UnitTrainingEvent.completed == False)  # noqa: E712
+        )
+        return session.exec(statement).all()
+
+    @staticmethod
+    def get_units_queued_count(*, session: Session, village_id: int) -> int:
+        """Get total count of units queued for training"""
+        statement = (
+            select(func.sum(models.UnitTrainingEvent.count))
+            .where(models.UnitTrainingEvent.village_id == village_id)
+            .where(models.UnitTrainingEvent.completed == False)  # noqa: E712
+        )
+        result = session.exec(statement).first()
+        return result if result is not None else 0
+
+
+class UnitMovement:
+    @staticmethod
+    def get_ready_movements(
+        *,
+        session: Session,
+        village_id: int,
+        is_attack: bool | None = None,
+        is_support: bool | None = None,
+    ) -> list[models.UnitMovement]:
+        """Get unit movements based on type and arrival time"""
+        now = datetime.now(UTC)
+        statement = (
+            select(models.UnitMovement)
+            .where(models.UnitMovement.target_village_id == village_id)
+            .where(models.UnitMovement.completed == False)  # noqa: E712
+            .where(models.UnitMovement.return_at == None)  # noqa: E711
+            .where(models.UnitMovement.arrival_at <= now)
+        )
+        if is_attack is not None:
+            statement = statement.where(models.UnitMovement.is_attack == is_attack)
+        if is_support is not None:
+            statement = statement.where(models.UnitMovement.is_support == is_support)
+        return session.exec(statement).all()
+
+    @staticmethod
+    def get_all_ready_attack_target_villages(
+        *,
+        session: Session,
+    ) -> list[int]:
+        """Get all village IDs that have ready attacks waiting to be resolved"""
+        now = datetime.now(UTC)
+        statement = (
+            select(models.UnitMovement.target_village_id)
+            .where(models.UnitMovement.is_attack == True)  # noqa: E712
+            .where(models.UnitMovement.completed == False)  # noqa: E712
+            .where(models.UnitMovement.return_at == None)  # noqa: E711
+            .where(models.UnitMovement.arrival_at <= now)
+            .distinct()
+        )
+        return session.exec(statement).all()

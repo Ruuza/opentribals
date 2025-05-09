@@ -6,7 +6,9 @@ from sqlmodel import Session, select
 
 from app import crud, models
 from app.game.buildings import BuildingType, Storage, Woodcutter
+from app.game.units import Archer, Swordsman, UnitName
 from app.game.village import (
+    BarracksRequiredError,
     InsufficientPopulationError,
     InsufficientResourcesError,
     MaxLevelReachedError,
@@ -45,8 +47,7 @@ class TestUpdateVillage:
 
         with freeze_time(one_hour_later):
             # Call update method
-            manager = VillageManager(village_id=village.id, session=session)
-            manager.update()
+            manager = VillageManager(village=village, session=session)
 
             # Refresh the village to get updated values
             session.refresh(village)
@@ -134,8 +135,7 @@ class TestUpdateVillage:
         one_hour_later = village.last_wood_update + timedelta(hours=1, milliseconds=1)
 
         with freeze_time(one_hour_later):
-            manager = VillageManager(village_id=village.id, session=session)
-            manager.update()
+            VillageManager(village=village, session=session)
 
         # Refresh the village to get updated values
         session.refresh(village)
@@ -216,8 +216,7 @@ class TestUpdateVillage:
         one_hour_later = village.last_wood_update + timedelta(hours=1, milliseconds=1)
 
         with freeze_time(one_hour_later):
-            manager = VillageManager(village_id=village.id, session=session)
-            manager.update()
+            VillageManager(village=village, session=session)
 
         # Refresh the village to get updated values
         session.refresh(village)
@@ -279,7 +278,7 @@ class TestUpdateVillage:
         session.commit()
 
         # When
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
         event = manager.schedule_building_upgrade(BuildingType.STORAGE)
 
         # Then
@@ -315,7 +314,7 @@ class TestScheduleBuildingUpgrade:
 
     def test_building_upgrade_queued(self, session: Session, village: models.Village):
         """Test that building upgrade is correctly queued"""
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Schedule first building upgrade
         event1 = manager.schedule_building_upgrade(BuildingType.WOODCUTTER)
@@ -348,7 +347,7 @@ class TestScheduleBuildingUpgrade:
 
     def test_queue_full(self, session: Session, village: models.Village):
         """Test that exception is raised when queue is full"""
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Fill the queue
         manager.schedule_building_upgrade(BuildingType.WOODCUTTER)
@@ -376,7 +375,7 @@ class TestScheduleBuildingUpgrade:
         village.iron = iron
         session.commit()
 
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Try to upgrade - should raise the expected exception
         with pytest.raises(InsufficientResourcesError):
@@ -392,7 +391,7 @@ class TestScheduleBuildingUpgrade:
         village.headquarters_lvl = 20
         session.commit()
 
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Try to upgrade a building that will exceed population - should raise InsufficientPopulationError
         with pytest.raises(InsufficientPopulationError):
@@ -410,7 +409,7 @@ class TestScheduleBuildingUpgrade:
         village.headquarters_lvl = 20
         session.commit()
 
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Farm upgrade should work despite population being maxed out
         event = manager.schedule_building_upgrade(BuildingType.FARM)
@@ -420,7 +419,7 @@ class TestScheduleBuildingUpgrade:
 
     def test_resources_deducted(self, session: Session, village: models.Village):
         """Test that resources are correctly deducted when scheduling an upgrade"""
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Get initial resources
         initial_wood = village.wood
@@ -448,7 +447,7 @@ class TestScheduleBuildingUpgrade:
         village.woodcutter_lvl = woodcutter.max_level
         session.commit()
 
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Try to upgrade beyond max level - should raise MaxLevelReachedError
         with pytest.raises(MaxLevelReachedError):
@@ -476,7 +475,7 @@ class TestStorageBuilding:
     def test_storage_capacity_limit(self, session: Session, village: models.Village):
         """Test that resources cannot exceed storage capacity"""
         # Set up a village manager and get initial storage capacity
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
         storage = Storage(level=1)
         initial_capacity = storage.max_capacity
 
@@ -502,10 +501,9 @@ class TestStorageBuilding:
     ):
         """Test that upgrading storage increases capacity"""
         # Set up a village manager
-        manager = VillageManager(village_id=village.id, session=session)
+        manager = VillageManager(village=village, session=session)
 
         # Get initial capacity
-        manager.update()
         initial_capacity = manager.get_max_storage_capacity()
 
         # Upgrade storage
@@ -531,3 +529,284 @@ class TestStorageBuilding:
         # Verify capacity increased
         assert new_capacity > initial_capacity
         assert new_capacity == expected_capacity
+
+
+class TestScheduleUnitTraining:
+    """Tests for the VillageManager schedule_unit_training method"""
+
+    DEFAULT_RESOURCES = 2000
+
+    @pytest.fixture
+    def village(self, session: Session) -> models.Village:
+        """Create a test village with resources and barracks"""
+        village = crud.Village.create(
+            session=session, name="Test Village", x=500, y=500, player_id=None
+        )
+        # Set high resource values for testing
+        village.wood = self.DEFAULT_RESOURCES
+        village.clay = self.DEFAULT_RESOURCES
+        village.iron = self.DEFAULT_RESOURCES
+        # Set barracks level
+        village.barracks_lvl = 1
+        # Set high farm level for enough population
+        village.farm_lvl = 5
+        session.commit()
+        return village
+
+    def test_unit_training_single_queued(
+        self, session: Session, village: models.Village
+    ):
+        """Test that a single unit can be queued for training"""
+        manager = VillageManager(village=village, session=session)
+
+        # Schedule training of a single archer
+        event = manager.schedule_unit_training(UnitName.ARCHER, 1)
+
+        # Verify event was created and has complete_at time set
+        assert event is not None
+        assert event.complete_at is not None
+        assert not event.completed
+        assert event.count == 1
+        assert event.unit_type == UnitName.ARCHER
+
+        # Check that resources were deducted
+        assert village.wood == self.DEFAULT_RESOURCES - Archer.base_wood_cost
+        assert village.clay == self.DEFAULT_RESOURCES - Archer.base_clay_cost
+        assert village.iron == self.DEFAULT_RESOURCES - Archer.base_iron_cost
+
+        # Initial check - no units should be trained yet
+        assert village.archer == 0
+
+    def test_unit_training_multiple_queued(
+        self, session: Session, village: models.Village
+    ):
+        """Test that multiple units can be queued for training"""
+        manager = VillageManager(village=village, session=session)
+
+        # Schedule training of multiple swordsmen
+        event = manager.schedule_unit_training(UnitName.SWORDSMAN, 5)
+
+        # Check resources taken
+        assert village.wood == self.DEFAULT_RESOURCES - 5 * Swordsman.base_wood_cost
+        assert village.clay == self.DEFAULT_RESOURCES - 5 * Swordsman.base_clay_cost
+        assert village.iron == self.DEFAULT_RESOURCES - 5 * Swordsman.base_iron_cost
+
+        # Verify event was created correctly
+        assert event is not None
+        assert event.complete_at is not None
+        assert not event.completed
+        assert event.count == 5
+        assert event.unit_type == UnitName.SWORDSMAN
+
+        # Check the database to verify
+        unit_events = session.exec(
+            select(models.UnitTrainingEvent).where(
+                models.UnitTrainingEvent.village_id == village.id
+            )
+        ).all()
+
+        assert len(unit_events) == 1
+        assert unit_events[0].count == 5
+        assert unit_events[0].unit_type == UnitName.SWORDSMAN
+
+    def test_unit_training_completion_single(
+        self, session: Session, village: models.Village
+    ):
+        """Test that a queued unit is added to the village when completed"""
+        manager = VillageManager(village=village, session=session)
+
+        # Set the time for test consistency
+        start_time = datetime.now(UTC)
+
+        with freeze_time(start_time):
+            # Schedule training of one archer
+            event = manager.schedule_unit_training(UnitName.ARCHER, 1)
+            complete_time = event.complete_at
+
+        # Move to just after completion time
+        with freeze_time(complete_time + timedelta(seconds=1)):
+            # Update should process the completed event
+            manager.update()
+
+        # Check that the unit is now in the village
+        session.refresh(village)
+        assert village.archer == 1
+
+        # Check that the event was removed
+        remaining_events = session.exec(
+            select(models.UnitTrainingEvent).where(
+                models.UnitTrainingEvent.village_id == village.id
+            )
+        ).all()
+        assert len(remaining_events) == 0
+
+    def test_unit_training_completion_multiple(
+        self, session: Session, village: models.Village
+    ):
+        """Test that multiple queued units are added one by one when completed"""
+        manager = VillageManager(village=village, session=session)
+
+        # Set the time for test consistency
+        start_time = datetime.now(UTC)
+
+        with freeze_time(start_time):
+            # Schedule training of 3 knights
+            event = manager.schedule_unit_training(UnitName.KNIGHT, 3)
+            first_complete_time = event.complete_at
+
+        # Move to just after the first unit should complete
+        with freeze_time(first_complete_time + timedelta(seconds=1)):
+            # Update should process the first unit
+            manager.update()
+
+            # Check that one unit is now in the village
+            session.refresh(village)
+            assert village.knight == 1
+
+            # Check that the event has reduced count but still exists
+            updated_events = session.exec(
+                select(models.UnitTrainingEvent).where(
+                    models.UnitTrainingEvent.village_id == village.id
+                )
+            ).all()
+            assert len(updated_events) == 1
+            assert updated_events[0].count == 2
+
+            # Get the next completion time
+            second_complete_time = updated_events[0].complete_at
+
+        # Move to after all units should be completed
+        with freeze_time(second_complete_time + timedelta(minutes=15)):
+            # Update should process all remaining units
+            manager.update()
+
+            # Check that all units are now in the village
+            session.refresh(village)
+            assert village.knight == 3
+
+            # Check that the event was removed
+            final_events = session.exec(
+                select(models.UnitTrainingEvent).where(
+                    models.UnitTrainingEvent.village_id == village.id
+                )
+            ).all()
+            assert len(final_events) == 0
+
+    def test_barracks_required(self, session: Session, village: models.Village):
+        """Test that barracks is required to train units"""
+        # Set barracks level to 0
+        village.barracks_lvl = 0
+        session.commit()
+
+        manager = VillageManager(village=village, session=session)
+
+        # Try to train units without barracks
+        with pytest.raises(BarracksRequiredError):
+            manager.schedule_unit_training(UnitName.ARCHER, 1)
+
+    def test_not_enough_resources(self, session: Session, village: models.Village):
+        """Test that exception is raised when there are not enough resources"""
+        # Set low resource values
+        village.wood = 10
+        village.clay = 10
+        village.iron = 10
+        session.commit()
+
+        manager = VillageManager(village=village, session=session)
+
+        # Try to train units with insufficient resources
+        with pytest.raises(InsufficientResourcesError):
+            manager.schedule_unit_training(UnitName.SWORDSMAN, 1)
+
+    def test_queue_limit(self, session: Session, village: models.Village):
+        """Test that exception is raised when the training queue is full"""
+        manager = VillageManager(village=village, session=session)
+
+        # The max_queue_size for barracks level 1 is 10
+        # Try to queue more units than allowed
+        with pytest.raises(QueueFullError):
+            manager.schedule_unit_training(UnitName.SKIRMISHER, 11)
+
+    @pytest.mark.parametrize(
+        "barracks_lvl, expected_time_ms",
+        [
+            (1, 1000 * 60 * 6.5),  # Base time for archer
+            (2, 1000 * 60 * 6.5 * 0.975),  # 2.5% reduction
+            (30, 1000 * 60 * 6.5 * 0.275),  # 72.5% reduction (capped at 95%)
+        ],
+    )
+    def test_barracks_level_affects_training_speed(
+        self,
+        session: Session,
+        village: models.Village,
+        barracks_lvl: int,
+        expected_time_ms: int,
+    ):
+        """Test that barracks level affects training speed"""
+        # Set barracks level for the test
+        village.barracks_lvl = barracks_lvl
+        session.commit()
+
+        manager = VillageManager(village=village, session=session)
+
+        # Schedule archer training
+        event = manager.schedule_unit_training(UnitName.ARCHER, 1)
+
+        # Get actual training time
+        training_time_ms = (event.complete_at - event.created_at).total_seconds() * 1000
+
+        # Check with tolerance
+        assert (
+            abs(training_time_ms - expected_time_ms) < 100
+        )  # Small tolerance for rounding
+
+    @pytest.mark.parametrize("should_add_completed_events", [False, True])
+    def test_population_limit(
+        self,
+        session: Session,
+        village: models.Village,
+        should_add_completed_events: bool,
+    ):
+        """Test that exception is raised when there's not enough population capacity"""
+        # Set low farm level for limited population
+        manager = VillageManager(village=village, session=session)
+        village.farm_lvl = 1
+        # Add population consumers to get close to the limit
+        village.archer = (
+            manager.get_max_population() - manager.get_current_population() - 5
+        )
+
+        # Add completed training events - these should be ignored in the calculations
+        if should_add_completed_events:
+            self._add_completed_training_events(session, village)
+
+        session.commit()
+
+        # The first batch of knights should be allowed
+        manager.schedule_unit_training(UnitName.KNIGHT, 5)
+
+        # The second batch should exceed the population limit
+        with pytest.raises(InsufficientPopulationError):
+            manager.schedule_unit_training(UnitName.KNIGHT, 5)
+
+    def _add_completed_training_events(self, session: Session, village: models.Village):
+        completed_events = [
+            models.UnitTrainingEvent(
+                village_id=village.id,
+                unit_type=UnitName.KNIGHT,
+                count=10,  # Large count that would exceed population if counted
+                created_at=datetime.now(UTC) - timedelta(hours=1),
+                complete_at=datetime.now(UTC) - timedelta(minutes=30),
+                completed=True,
+            ),
+            models.UnitTrainingEvent(
+                village_id=village.id,
+                unit_type=UnitName.ARCHER,
+                count=15,  # Another large count
+                created_at=datetime.now(UTC) - timedelta(hours=2),
+                complete_at=datetime.now(UTC) - timedelta(hours=1),
+                completed=True,
+            ),
+        ]
+        session.add_all(completed_events)
+        session.commit()

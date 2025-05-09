@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from pydantic import EmailStr
+from pydantic import BaseModel, EmailStr
 from sqlmodel import Field, SQLModel
 
 # --- User schemas ---#
@@ -106,12 +107,14 @@ class VillageBasePrivate(VillageBasePublic):
     iron_mine_lvl: int = Field(default=1)
     farm_lvl: int = Field(default=1)
     storage_lvl: int = Field(default=1)
+    barracks_lvl: int = Field(default=1)
 
-    anti_melee_units: int = Field(default=0)
-    anti_ranged_units: int = Field(default=0)
+    swordsman: int = Field(default=0)
+    archer: int = Field(default=0)
 
-    melee_attack_units: int = Field(default=0)
-    ranged_attack_units: int = Field(default=0)
+    knight: int = Field(default=0)
+    skirmisher: int = Field(default=0)
+    nobleman: int = Field(default=0)
 
     horse_units: int = Field(default=0)
 
@@ -121,6 +124,7 @@ class VillageBasePrivate(VillageBasePublic):
 
     population: int = Field(default=0)
     population_limit: int = Field(default=100)
+    loyalty: float = Field(default=100.0)
 
 
 class VillageOutPublic(VillageBasePublic):
@@ -138,3 +142,55 @@ class VillageUpdate(SQLModel):
 class VillageOutPublicList(SQLModel):
     data: list[VillageOutPublic]
     count: int
+
+
+# Battle result
+
+
+class Units(BaseModel):
+    """Class to represent available units in a village"""
+
+    archer: int = 0
+    swordsman: int = 0
+    knight: int = 0
+    skirmisher: int = 0
+    nobleman: int = 0
+
+
+class BattleResultBase(BaseModel):
+    attacker_won: bool
+
+    attacking_units: Units
+    attacking_units_lost: Units
+    defending_units: Units
+    defending_units_lost: Units
+
+    original_loyalty: float
+    loyalty_damage: float | None = None
+
+    luck: float
+
+
+class BattleReport(BattleResultBase):
+    datetime: datetime
+
+    loot_capacity: int
+    looted_wood: int
+    looted_clay: int
+    looted_iron: int
+
+    conquered_by_player: PlayerBase | None = None
+    conquered_village: VillageBasePublic | None = None
+
+
+class BattleResultForMovement(BattleReport):
+    attacking_village_id: int
+    defending_village_id: int
+
+    own_units: Units
+    own_units_lost: Units
+
+    own_loot_capacity: int
+    own_looted_wood: int
+    own_looted_clay: int
+    own_looted_iron: int
