@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
+from app import crud
 from app.api.deps import CurrentUser, SessionDep
 from app.game.village import VillageManager
 from app.models import Village
@@ -85,7 +86,7 @@ def get_village_private(
     """
     Get private village information (only available to the village owner)
     """
-    village = session.get(Village, village_id)
+    village = crud.Village.get_for_update(session=session, village_id=village_id)
     if not village:
         raise HTTPException(status_code=404, detail="Village not found")
 
@@ -97,8 +98,7 @@ def get_village_private(
         )
 
     # Update village resources and stats
-    village_manager = VillageManager(village_id=village_id, session=session)
-    village_manager.update()
+    village_manager = VillageManager(village=village, session=session)
 
     return village_manager.village
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    combat,
     login,
     players,
     private,
@@ -25,6 +26,7 @@ api_router.include_router(players.router)
 api_router.include_router(users_admin.router)
 api_router.include_router(villages.router)
 api_router.include_router(world.router)
+api_router.include_router(combat.router)
 
 if settings.ENVIRONMENT in ["test", "local"]:
     api_router.include_router(private.router)
