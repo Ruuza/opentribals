@@ -238,6 +238,7 @@ class AutoBuilder:
         # Try to build from our queue
         for i, building_type in enumerate(self.building_queue[:]):
             # Check if the building info is available
+            building_type = building_type.value
             if building_type not in self.available_buildings:
                 logger.error(
                     f"Building {building_type} not found in available buildings"

@@ -146,6 +146,8 @@ def get_village_private(
 
     # Update village resources and stats
     village_manager = VillageManager(village=village, session=session)
+    session.commit()
+    session.refresh(village_manager.village)
 
     return village_manager.village
 
@@ -186,9 +188,13 @@ def get_building_queue(
     """
     Get the current building construction queue for a village
     """
-    check_village_access(
+    village = check_village_access(
         session=session, village_id=village_id, current_user=current_user
     )
+
+    # Update village resources
+    VillageManager(village=village, session=session)
+    session.commit()
 
     # Get building events
     building_events = crud.BuildingEvent.get_following_events(
@@ -233,6 +239,8 @@ def schedule_building_construction(
     # Create village manager and schedule the building construction
     village_manager = VillageManager(village=village, session=session)
     event = village_manager.schedule_building_upgrade(building_type)
+    session.commit()
+    session.refresh(event)
 
     return BuildingEventResponse(
         id=event.id,
@@ -263,6 +271,7 @@ def get_available_buildings(
 
     # Update village resources
     VillageManager(village=village, session=session)
+    session.commit()
 
     # Get information about all building types
     buildings_info = []
@@ -311,6 +320,7 @@ def get_unit_training_queue(
     )
 
     VillageManager(village=village, session=session)
+    session.commit()
 
     unit_events = crud.UnitTrainingEvent.get_following_events(
         session=session, village_id=village_id
@@ -355,6 +365,8 @@ def schedule_unit_training(
         unit_name=training_request.unit_type,
         count=training_request.count,
     )
+    session.commit()
+    session.refresh(event)
 
     return UnitTrainingEventResponse(
         id=event.id,
@@ -384,6 +396,7 @@ def get_available_units(
 
     # Update village resources
     VillageManager(village=village, session=session)
+    session.commit()
 
     units_info = []
     barracks_level = village.barracks_lvl

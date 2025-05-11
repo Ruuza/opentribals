@@ -34,7 +34,7 @@ ATTACK_UNITS = {  # Units to send in each attack
     "skirmisher": 0,
     "nobleman": 0,
 }
-CHECK_INTERVAL = 300  # Time between checks in seconds (5 minutes)
+CHECK_INTERVAL = 60  # Time between checks in seconds (1 minute)
 API_VERSION = "v1"  # API version
 
 
@@ -66,7 +66,7 @@ class AutoAttacker:
                 logger.error(f"Login failed: {response.status_code} - {response.text}")
                 return False
         except Exception as e:
-            logger.error(f"Login error: {e}")
+            logger.error(f"Login error: {e}", exc_info=True)
             return False
 
     async def get_own_village(self) -> bool:
@@ -93,7 +93,7 @@ class AutoAttacker:
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error getting village: {e}")
+            logger.error(f"Error getting village: {e}", exc_info=True)
             return False
 
     async def find_abandoned_villages(self) -> list[dict[str, Any]]:
@@ -135,7 +135,7 @@ class AutoAttacker:
                 )
                 return []
         except Exception as e:
-            logger.error(f"Error finding abandoned villages: {e}")
+            logger.error(f"Error finding abandoned villages: {e}", exc_info=True)
             return []
 
     async def send_attack(self, target_village_id: int) -> bool:
@@ -163,7 +163,7 @@ class AutoAttacker:
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error sending attack: {e}")
+            logger.error(f"Error sending attack: {e}", exc_info=True)
             return False
 
     async def check_movements(self) -> int:
@@ -184,7 +184,7 @@ class AutoAttacker:
                 outgoing_attacks = sum(
                     1
                     for m in movements
-                    if m["village_id"] == VILLAGE_ID
+                    if m["origin_village"]["id"] == VILLAGE_ID
                     and m["is_attack"]
                     and not m["completed"]
                 )
@@ -195,8 +195,8 @@ class AutoAttacker:
                     f"Failed to check movements: {response.status_code} - {response.text}"
                 )
                 return 0
-        except Exception as e:
-            logger.error(f"Error checking movements: {e}")
+        except Exception:
+            logger.error("Error checking movements", exc_info=True)
             return 0
 
     async def run(self):
@@ -251,7 +251,7 @@ class AutoAttacker:
                 await asyncio.sleep(10)
 
             except Exception as e:
-                logger.error(f"Error in main loop: {e}")
+                logger.error(f"Error in main loop: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait longer on error
 
 
