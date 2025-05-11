@@ -4,6 +4,9 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Field, SQLModel
 
+from app.game.buildings import BuildingType
+from app.game.units import UnitName
+
 # --- User schemas ---#
 
 
@@ -88,6 +91,11 @@ class NewPassword(SQLModel):
 class PlayerBase(SQLModel):
     id: uuid.UUID
     username: str = Field(min_length=4, max_length=20)
+
+
+class PlayerOutPublic(PlayerBase):
+    villages: list["VillageBasePublic"] = []
+    villages_count: int = 0
 
 
 # --- Village schemas --- #
@@ -194,3 +202,150 @@ class BattleResultForMovement(BattleReport):
     own_looted_wood: int
     own_looted_clay: int
     own_looted_iron: int
+
+
+# --- Message schemas ---#
+
+
+class MessageBase(SQLModel):
+    """Base schema for message operations"""
+
+    message: str
+
+
+class MessageCreate(MessageBase):
+    """Schema for creating a new message"""
+
+    to_player_id: uuid.UUID
+
+
+class MessageOut(MessageBase):
+    """Schema for returning basic message information"""
+
+    id: int
+    from_player_id: uuid.UUID | None
+    to_player_id: uuid.UUID
+    displayed: bool
+    created_at: datetime
+
+
+class MessageDetail(MessageOut):
+    """Schema for returning detailed message information including battle data"""
+
+    battle_data: str | None
+
+
+class MessagesList(SQLModel):
+    """Schema for returning a list of messages"""
+
+    data: list[MessageOut]
+    count: int
+
+
+# --- Building schemas --- #
+class BuildingEventResponse(SQLModel):
+    """Schema for building event response"""
+
+    id: int
+    building_type: BuildingType
+    created_at: datetime
+    complete_at: datetime | None
+
+
+class BuildingQueueResponse(SQLModel):
+    """Schema for building queue response"""
+
+    queue: list[BuildingEventResponse]
+
+
+class BuildingInformation(SQLModel):
+    """Schema for building information"""
+
+    building_type: BuildingType
+    current_level: int
+    max_level: int
+    max_level_reached: bool
+    wood_cost: int
+    clay_cost: int
+    iron_cost: int
+    build_time_ms: int
+    population: int
+
+
+class AvailableBuildingsResponse(SQLModel):
+    """Schema for available buildings response"""
+
+    buildings: list[BuildingInformation]
+
+
+# --- Unit schemas --- #
+class UnitTrainingRequest(SQLModel):
+    """Schema for unit training request"""
+
+    unit_type: UnitName
+    count: int = Field(gt=0)
+
+
+class UnitTrainingEventResponse(SQLModel):
+    """Schema for unit training event response"""
+
+    id: int
+    unit_type: UnitName
+    count: int
+    created_at: datetime
+    complete_at: datetime | None
+
+
+class UnitTrainingQueueResponse(SQLModel):
+    """Schema for unit training queue response"""
+
+    queue: list[UnitTrainingEventResponse]
+
+
+class UnitInformation(SQLModel):
+    """Schema for unit information"""
+
+    unit_type: UnitName
+    wood_cost: int
+    clay_cost: int
+    iron_cost: int
+    training_time_ms: int
+    population: int
+    attack: int
+    defense_melee: int
+    defense_ranged: int
+    loot_capacity: int
+    speed_ms: int
+    can_train: bool
+
+
+class AvailableUnitsResponse(SQLModel):
+    """Schema for available units response"""
+
+    units: list[UnitInformation]
+
+
+# --- Unit Movement schemas --- #
+
+
+class UnitMovementOut(SQLModel):
+    """Schema for unit movement response"""
+
+    id: int
+    created_at: datetime
+    arrival_at: datetime | None
+    return_at: datetime | None
+    completed: bool
+    archer: int
+    swordsman: int
+    knight: int
+    skirmisher: int
+    nobleman: int
+    return_wood: int
+    return_clay: int
+    return_iron: int
+    is_attack: bool
+    is_support: bool
+    is_spy: bool
+    target_village: VillageOutPublic
+    origin_village: VillageOutPublic

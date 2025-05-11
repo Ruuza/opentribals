@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy_utils import create_database, database_exists, drop_database
 from sqlmodel import Session, SQLModel
 
-from app import crud
+from app import crud, models
 from app.api.deps import get_db
 from app.core.config import settings
 from app.core.db import engine, init_db
@@ -56,7 +56,7 @@ def client(session: Session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture()
-def test_user(session: Session) -> UserCreate:
+def test_user(session: Session) -> models.User:
     user_create = UserCreate(
         email=EMAIL_TEST_USER,
         password=PASSWORD_TEST_USER,
@@ -65,6 +65,19 @@ def test_user(session: Session) -> UserCreate:
     )
     user = crud.User.create(session=session, user_create=user_create)
     return user
+
+
+@pytest.fixture()
+def test_player(session: Session, test_user: models.User) -> UserCreate:
+    """Create a testing player"""
+    player = models.Player(
+        id=test_user.id,
+        username=test_user.username,
+    )
+    session.add(player)
+    session.commit()
+    session.refresh(player)
+    return player
 
 
 @pytest.fixture()

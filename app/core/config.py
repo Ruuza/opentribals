@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _adjust_for_testing(self) -> Self:
         if self.ENVIRONMENT == "test":
+            self.GAME_SPEED = 1
             self.POSTGRES_DB = "OpenTribalsTest"
             self.FIRST_SUPERUSER = "superuser@example.com"
             self.FIRST_SUPERUSER_PASSWORD = "testpassword"

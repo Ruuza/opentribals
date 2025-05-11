@@ -61,13 +61,24 @@ class User:
 class Village:
     @staticmethod
     def create(
-        *, session: Session, name: str, x: int, y: int, player_id: uuid.UUID | None
+        *,
+        session: Session,
+        name: str,
+        x: int,
+        y: int,
+        player_id: uuid.UUID | None,
+        woodcutter_lvl=1,
+        clay_pit_lvl=1,
+        iron_mine_lvl=1,
     ) -> models.Village:
         db_obj = models.Village(
             name=name,
             x=x,
             y=y,
             player_id=player_id,
+            woodcutter_lvl=woodcutter_lvl,
+            clay_pit_lvl=clay_pit_lvl,
+            iron_mine_lvl=iron_mine_lvl,
         )
         session.add(db_obj)
         session.commit()

@@ -3,6 +3,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from typing import TypeVar, cast
 
+from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
 from app import crud
@@ -28,66 +29,76 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=Building)
 
 
-class MaxLevelReachedError(Exception):
+class MaxLevelReachedError(HTTPException):
     """
     Exception raised when trying to upgrade a building that is already at max level
     """
 
-    pass
+    def __init__(self, detail: str = "Building is already at max level"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class AnotherEventAlreadySetCompleteAt(Exception):
+class AnotherEventAlreadySetCompleteAt(HTTPException):
     """Exception raised when another event has already set complete_at"""
 
-    pass
+    def __init__(self, detail: str = "Another event has already set complete_at"):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
-class InsufficientResourcesError(Exception):
+class InsufficientResourcesError(HTTPException):
     """Exception raised when there are not enough resources for upgrade"""
 
-    pass
+    def __init__(self, detail: str = "Not enough resources"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class QueueFullError(Exception):
+class QueueFullError(HTTPException):
     """Exception raised when building queue is full"""
 
-    pass
+    def __init__(self, detail: str = "Building queue is full"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class InsufficientPopulationError(Exception):
+class InsufficientPopulationError(HTTPException):
     """Exception raised when there is not enough population capacity"""
 
-    pass
+    def __init__(self, detail: str = "Not enough population capacity"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class BarracksRequiredError(Exception):
+class BarracksRequiredError(HTTPException):
     """Exception raised when trying to train units without a barracks"""
 
-    pass
+    def __init__(self, detail: str = "Barracks required to train units"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class SelfTargetError(Exception):
+class SelfTargetError(HTTPException):
     """Exception raised when trying to send units to own village"""
 
-    pass
+    def __init__(self, detail: str = "Cannot send units to own village"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class InsufficientUnitsError(Exception):
+class InsufficientUnitsError(HTTPException):
     """Exception raised when there are not enough units available"""
 
-    pass
+    def __init__(self, detail: str = "Not enough units available for movement"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class MovementNotFoundError(Exception):
+class MovementNotFoundError(HTTPException):
     """Exception raised when a movement is not found"""
 
-    pass
+    def __init__(self, detail: str = "Movement not found or already completed"):
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
-class VillageNotFoundError(Exception):
+class VillageNotFoundError(HTTPException):
     """Exception raised when a village is not found"""
 
-    pass
+    def __init__(self, detail: str = "Village not found"):
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
     # This class will be implemented later for simulating battles,
     # killing units, generating reports, and handling resources looting
@@ -710,7 +721,7 @@ class VillageManager:
         # If units haven't arrived yet, return them immediately
         if now < movement.arrival_at.replace(tzinfo=UTC):
             # Calculate time passed since departure
-            time_passed = now - movement.created_at
+            time_passed = now - movement.created_at.replace(tzinfo=UTC)
             movement.return_at = now + time_passed
         else:
             units = Units(
