@@ -115,9 +115,13 @@ class WorldManager:
         # Create the village
         village = crud.Village.create(
             session=session,
-            name="Village",
+            name="Village" if player_id else "Abandoned Village",
             x=x,
             y=y,
             player_id=player_id,
+            # increase production rates for barbarian villages
+            woodcutter_lvl=10 if player_id is None else 1,
+            clay_pit_lvl=10 if player_id is None else 1,
+            iron_mine_lvl=10 if player_id is None else 1,
         )
         return village
