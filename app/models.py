@@ -1,114 +1,95 @@
 import uuid
+from datetime import UTC, datetime
 
-from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Column, Enum, Field, Relationship, SQLModel
 
-
-# Shared properties
-class UserBase(SQLModel):
-    email: EmailStr = Field(unique=True, index=True, max_length=255)
-    is_active: bool = True
-    is_superuser: bool = False
-    full_name: str | None = Field(default=None, max_length=255)
+from app.game.buildings import BuildingType
+from app.game.units import UnitName
+from app.schemas import PlayerBase, UserBase, VillageBasePrivate
 
 
-# Properties to receive via API on creation
-class UserCreate(UserBase):
-    password: str = Field(min_length=8, max_length=40)
-
-
-class UserRegister(SQLModel):
-    email: EmailStr = Field(max_length=255)
-    password: str = Field(min_length=8, max_length=40)
-    full_name: str | None = Field(default=None, max_length=255)
-
-
-# Properties to receive via API on update, all are optional
-class UserUpdate(UserBase):
-    email: EmailStr | None = Field(default=None, max_length=255)  # type: ignore
-    password: str | None = Field(default=None, min_length=8, max_length=40)
-
-
-class UserUpdateMe(SQLModel):
-    full_name: str | None = Field(default=None, max_length=255)
-    email: EmailStr | None = Field(default=None, max_length=255)
-
-
-class UpdatePassword(SQLModel):
-    current_password: str = Field(min_length=8, max_length=40)
-    new_password: str = Field(min_length=8, max_length=40)
-
-
-# Database model, database table inferred from class name
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
 
 
-# Properties to return via API, id is always required
-class UserPublic(UserBase):
-    id: uuid.UUID
+# No relation between Player and User because they will be in different databases in the
+# future
+class Player(PlayerBase, table=True):
+    id: uuid.UUID = Field(primary_key=True)
 
-
-class UsersPublic(SQLModel):
-    data: list[UserPublic]
-    count: int
-
-
-# Shared properties
-class ItemBase(SQLModel):
-    title: str = Field(min_length=1, max_length=255)
-    description: str | None = Field(default=None, max_length=255)
-
-
-# Properties to receive on item creation
-class ItemCreate(ItemBase):
-    pass
-
-
-# Properties to receive on item update
-class ItemUpdate(ItemBase):
-    title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore
-
-
-# Database model, database table inferred from class name
-class Item(ItemBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    title: str = Field(max_length=255)
-    owner_id: uuid.UUID = Field(
-        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    villages: list["Village"] = Relationship(
+        back_populates="player", cascade_delete=True
     )
-    owner: User | None = Relationship(back_populates="items")
 
 
-# Properties to return via API, id is always required
-class ItemPublic(ItemBase):
-    id: uuid.UUID
-    owner_id: uuid.UUID
+class Village(VillageBasePrivate, table=True):
+    player_id: uuid.UUID | None = Field(
+        foreign_key="player.id", nullable=True, ondelete="SET NULL"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_wood_update: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_clay_update: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_iron_update: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    loyalty: float = Field(default=100.0)
+
+    player: Player | None = Relationship(back_populates="villages")
 
 
-class ItemsPublic(SQLModel):
-    data: list[ItemPublic]
-    count: int
+class BuildingEvent(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    village_id: int = Field(foreign_key="village.id")
+    building_type: BuildingType = Field(sa_column=Column(Enum(BuildingType)))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    complete_at: datetime | None
+    completed: bool = False
 
 
-# Generic message
-class Message(SQLModel):
+class UnitTrainingEvent(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    village_id: int = Field(foreign_key="village.id")
+    unit_type: UnitName = Field(sa_column=Column(Enum(UnitName)))
+    count: int = Field(default=1)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    complete_at: datetime | None
+    completed: bool = False
+
+
+class UnitMovement(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    village_id: int = Field(foreign_key="village.id")
+    target_village_id: int = Field(foreign_key="village.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    arrival_at: datetime | None
+    return_at: datetime | None
+    completed: bool = False
+    archer: int = Field(default=0)
+    swordsman: int = Field(default=0)
+    knight: int = Field(default=0)
+    skirmisher: int = Field(default=0)
+    nobleman: int = Field(default=0)
+    return_wood: int = Field(default=0)
+    return_clay: int = Field(default=0)
+    return_iron: int = Field(default=0)
+    is_attack: bool = False
+    is_support: bool = False
+    is_spy: bool = False
+
+    target_village: Village = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[UnitMovement.target_village_id]"}
+    )
+    origin_village: Village = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[UnitMovement.village_id]"}
+    )
+
+
+class BattleMessage(SQLModel, table=True):
+    """Message model for battle reports and other player communications"""
+
+    id: int = Field(primary_key=True)
+    from_player_id: uuid.UUID | None = Field(default=None, foreign_key="player.id")
+    to_player_id: uuid.UUID = Field(foreign_key="player.id")
     message: str
-
-
-# JSON payload containing access token
-class Token(SQLModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-# Contents of JWT token
-class TokenPayload(SQLModel):
-    sub: str | None = None
-
-
-class NewPassword(SQLModel):
-    token: str
-    new_password: str = Field(min_length=8, max_length=40)
+    battle_data: str | None = Field(default=None)  # JSON serialized battle report data
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    displayed: bool = Field(default=False)

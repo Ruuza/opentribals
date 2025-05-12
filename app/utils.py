@@ -1,14 +1,16 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import emails  # type: ignore
 import jwt
+from fastapi import HTTPException
 from jinja2 import Template
 from jwt.exceptions import InvalidTokenError
 
+from app import crud
 from app.core import security
 from app.core.config import settings
 
@@ -102,7 +104,7 @@ def generate_new_account_email(
 
 def generate_password_reset_token(email: str) -> str:
     delta = timedelta(hours=settings.EMAIL_RESET_TOKEN_EXPIRE_HOURS)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + delta
     exp = expires.timestamp()
     encoded_jwt = jwt.encode(
@@ -121,3 +123,14 @@ def verify_password_reset_token(token: str) -> str | None:
         return str(decoded_token["sub"])
     except InvalidTokenError:
         return None
+
+
+def check_user_not_already_exists(session, email: str, username: str):
+    user_by_email = crud.User.get_by_email(session=session, email=email)
+    user_by_username = crud.User.get_by_username(session=session, username=username)
+    if user_by_email or user_by_username:
+        reason = "email" if user_by_email else "username"
+        raise HTTPException(
+            status_code=400,
+            detail=f"The user with this {reason} already exists in the system",
+        )
