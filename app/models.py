@@ -38,7 +38,7 @@ class Village(VillageBasePrivate, table=True):
 
 class BuildingEvent(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    village_id: int
+    village_id: int = Field(foreign_key="village.id")
     building_type: BuildingType = Field(sa_column=Column(Enum(BuildingType)))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     complete_at: datetime | None
@@ -47,7 +47,7 @@ class BuildingEvent(SQLModel, table=True):
 
 class UnitTrainingEvent(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    village_id: int
+    village_id: int = Field(foreign_key="village.id")
     unit_type: UnitName = Field(sa_column=Column(Enum(UnitName)))
     count: int = Field(default=1)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
